@@ -1,0 +1,322 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+# Thomas Chapman
+## BAN 502
+### Logistic Regression Classification Assignment
+
+
+```{r include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(e1071)
+library(ROCR)
+library(readr)
+```
+
+```{r}
+parole <- read_csv("parole.csv")
+parole$male <- as.factor(parole$male)
+parole$race <- as.factor(parole$race)
+parole$state <- as.factor(parole$state)
+parole$crime <- as.factor(parole$crime)
+parole$multiple.offenses <- as.factor(parole$multiple.offenses)
+parole$violator <- as.factor(parole$violator)
+```
+
+
+```{r}
+  parole <- rename(parole, gender = "male")
+```
+
+```{r}
+levels(parole$gender) <- list(male  = "1", female = "0")
+levels(parole$race) <- list(white  = "1", nonwhite = "2")
+levels(parole$state) <- list(Kentucky = "2", Louisiana = "3", Virgina = "4", other = "1")
+levels(parole$multiple.offenses) <- list(Yes = "1", No = "0")
+levels(parole$crime) <- list(larceny = "2", drug.related = "3", driving.related = "4", other = "1")
+levels(parole$violator) <- list(Yes = "1", No = "0")
+```
+
+### Task 1
+
+```{r}
+set.seed(12345)
+parole_split = initial_split(parole, prob = .7, strata = violator)
+train= training(parole_split)
+test= testing(parole_split)
+```
+  
+  
+### Task 2
+
+```{r}
+ggplot(train, aes(x=gender, fill=violator)) +
+  geom_bar(position="fill")
+
+```
+  
+Looking at the differences between male and female proportions of violators, it appears that males have a higher probability of falling into the violator class.
+  
+  
+```{r}
+ggplot(train, aes(x=race, fill=violator)) +
+  geom_bar(position="fill")
+```
+  
+Looking at the differences between white and non-white proportions of violators, it appears that non-white people have a higher probability of falling into the violator class.  
+  
+```{r}
+ggplot(train, aes(x=state, fill=violator)) +
+  geom_bar(position="fill")
+
+ggplot(train, aes(x=state, fill=violator))+
+  geom_bar()
+```
+  
+When looking at the differences of violators from different states, it does appear that state has a pretty large impact on the probability of being a violator.  
+
+```{r}
+ggplot(train, aes(x=multiple.offenses, fill=violator)) +
+  geom_bar(position="fill")
+```
+  
+When looking at the differences of violators and whether they are also have multiple offenses, it does appear that the variable has an impact on their probability of being a violator. 
+
+```{r}
+ggplot(train, aes(x=crime, fill=violator)) +
+  geom_bar(position="fill")
+```
+  
+When looking at the differences of the types of crime among the violators, it does appear that the type of crime does have an impact on the probability of someone falling into the "violator" category.  
+  
+```{r}
+ggplot(train, aes(x=violator, y=age)) +
+  geom_boxplot()
+```
+  
+When comparing age between violators and non-violators, it doesn't appear that age has a significant impact on someone's probability of being a violator. 
+  
+### Task 3
+It appears that "state" is going to be the most indicative variable for predicting if someone falls into the "violator" category.
+
+```{r}
+parole_model = 
+  logistic_reg() %>%
+  set_engine("glm")
+
+parole_recipe = recipe(violator ~ state, train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+  
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>%
+  add_model(parole_model)
+
+parole_fit = fit(logreg_wf, train)
+  
+
+
+```
+
+```{r}
+summary(parole_fit$fit$fit$fit)
+```
+  
+This predictive model has an AIC score of 287.75. In order to assess the quality of this model, we'd need to compare it to other models. The lower the AIC score, the better.   
+  
+### Task 4
+  
+```{r}
+parole_model = 
+  logistic_reg() %>%
+  set_engine("glm")
+
+parole_recipe = recipe(violator ~ state + multiple.offenses, train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+  
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>%
+  add_model(parole_model)
+
+parole_fit2 = fit(logreg_wf, train)
+summary(parole_fit2$fit$fit$fit)
+```
+  
+```{r}
+parole_model = 
+  logistic_reg() %>%
+  set_engine("glm")
+
+parole_recipe = recipe(violator ~ state + multiple.offenses + crime, train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+  
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>%
+  add_model(parole_model)
+
+parole_fit3 = fit(logreg_wf, train)
+summary(parole_fit3$fit$fit$fit)
+```
+  
+```{r}
+parole_model = 
+  logistic_reg() %>%
+  set_engine("glm")
+
+parole_recipe = recipe(violator ~ state + multiple.offenses + gender, train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+  
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>%
+  add_model(parole_model)
+
+parole_fit4 = fit(logreg_wf, train)
+summary(parole_fit4$fit$fit$fit)
+```
+  
+```{r}
+parole_model = 
+  logistic_reg() %>%
+  set_engine("glm")
+
+parole_recipe = recipe(violator ~ state + multiple.offenses + race, train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+  
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>%
+  add_model(parole_model)
+
+parole_fit5 = fit(logreg_wf, train)
+summary(parole_fit5$fit$fit$fit)
+```
+  
+The lowest I could get the AIC score was 269.04, and that was by including the predictive variables of state, multiple.offenses, and race in the model. The AIC score was the lowest for that combination (relative to the other combinations I tried), making it the highest-quality model of prediction. The most intuitive variable I found (in my opinion) was the multiple offenses. Not having multiple offenses increases your probability of being a non-violator. The only part of the model that I didn't quite understand was the significance for Louisiana. In the other models I produced, it always had a p-value of less than .05, but for this one, it has a p-value of .11, making it not significant.   
+  
+### Task 5
+  
+```{r}
+parole_model = 
+  logistic_reg() %>%
+  set_engine("glm")
+
+parole_recipe = recipe(violator ~ state + multiple.offenses + race, train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+  
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>%
+  add_model(parole_model)
+
+parole_fit5 = fit(logreg_wf, train)
+summary(parole_fit5$fit$fit$fit)
+```
+  
+This is actually the exact same as the previous model I created. The AIC score is 269.04, which is lower than the very first model I created, meaning it's higher quality. The following variables were significant: Virginia, Multiple-offenses-no, and a non-white race. The following were insignificant: Louisiana and "other" state. Being from Virginia and not having multiple offenses increase your probability of being a non-violator, while being a non-white race decreases your probability of being a non-violator.    
+  
+### Task 6  
+  
+```{r}
+Parolee1 = data.frame(state = "Louisiana", multiple.offenses = "Yes", race = "white")
+predict(parole_fit5, Parolee1, type = "prob")
+
+Parolee2 = data.frame(state = "Kentucky", multiple.offenses = "No", race = "nonwhite")
+predict(parole_fit5, Parolee2, type = "prob")
+
+```
+
+    
+For Parolee1, there is a 40% chance they will be a violator and a 60% chance they will not be a violator. For Parolee2, there is a 14% chance they will be a violator and an 86% chance they will not be a violator.
+  
+### Task 7
+  
+```{r}
+predictions = predict(parole_fit5, train, type = "prob")[1]
+head(predictions)
+```
+
+```{r}
+ROCRpred = prediction(predictions, train$violator) 
+
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize = TRUE, print.cutoffs.at=seq(0,1, by = .1), text.adj = c(-0.2,1.7))
+
+```
+
+```{r}
+opt.cut = function(perf, pred){
+  cut.ind = mapply(FUN=function(x, y, p){ 
+  d=(x-0^2 + (y-1)^2)
+  ind = which(d==min(d))
+  c(sensitivity = y[[ind]], specificity = 1-x[[ind]],
+    cutoff = p [[ind]])
+}, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+
+```
+    
+The probability threshold that best balances sensitivity and specificity is a cutoff of .26. For anyone who has a probability of higher than .26 to be a violator, we put them in thE violator category. 
+  
+  
+### Task 8
+  
+```{r}
+t1 = table(train$violator, predictions > .2604881)
+t1
+```
+  
+  
+Accuracy
+```{r}
+(t1[1,2]+t1[2,1])/nrow(train)
+
+```
+Sensitivity
+```{r}
+34/(34+24)
+```
+  
+Specificity  
+```{r}
+410/(410+37)
+```
+  
+The accuracy of the model on the training set is .88, the sensitivity is .57, and the specificity is .91. When you incorrectly classify a parolee, you run the risk of them violating their parole when you aren't expecting them to. 
+  
+### Task 9
+  
+Trial and Error  
+```{r}
+t1 = table(train$violator, predictions > .5)
+t1
+(t1[1,2]+t1[2,1])/nrow(train)
+```
+```{r}
+t1 = table(train$violator, predictions > .6)
+t1
+(t1[1,2]+t1[2,1])/nrow(train)
+```
+```{r}
+t1 = table(train$violator, predictions > .45)
+t1
+(t1[1,2]+t1[2,1])/nrow(train)
+```
+
+  
+Using Trial-and-Error, the threshold that maximizes accuracy on the training set is .45.
+  
+### Task 10
+  
+```{r}
+predictions2 = predict(parole_fit5, test, type = "prob")[1]
+head(predictions)
+
+t2 = table(test$violator, predictions2 > .45)
+t2
+(t2[1,2]+t2[2,1])/nrow(test)
+
+
+```
+
+The accuracy of the model on the testing set is .88, which is very close to the accuracy of the model on the training set. 

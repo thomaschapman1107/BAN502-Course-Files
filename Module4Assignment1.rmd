@@ -1,0 +1,312 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+
+# Thomas Chapman
+## BAN502
+### Module 4 Assignment 1
+
+```{r include = FALSE}
+library(tidyverse)
+library(tidymodels)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(RColorBrewer)
+```
+
+```{r}
+parole <- read_csv("parole.csv")
+parole$male <- as.factor(parole$male)
+parole$race <- as.factor(parole$race)
+parole$state <- as.factor(parole$state)
+parole$crime <- as.factor(parole$crime)
+parole$multiple.offenses <- as.factor(parole$multiple.offenses)
+parole$violator <- as.factor(parole$violator)
+parole <- rename(parole, gender = "male")
+```
+
+```{r}
+
+levels(parole$gender) <- list(male  = "1", female = "0")
+levels(parole$race) <- list(white  = "1", nonwhite = "2")
+levels(parole$state) <- list(Kentucky = "2", Louisiana = "3", Virgina = "4", other = "1")
+levels(parole$multiple.offenses) <- list(Yes = "1", No = "0")
+levels(parole$crime) <- list(larceny = "2", drug.related = "3", driving.related = "4", other = "1")
+levels(parole$violator) <- list(Yes = "1", No = "0")
+```
+
+  
+### Task 1
+  
+```{r}
+set.seed(12345) 
+parole_split = initial_split(parole, prop = 0.7, strata = violator) 
+train = training(parole_split)
+test = testing(parole_split)
+```
+
+  
+### Task 2
+  
+```{r}
+parole_recipe = recipe(violator  ~ ., train)
+
+
+tree_model1 = decision_tree() %>% 
+  set_engine("rpart", model = TRUE) %>% 
+  set_mode("classification")
+
+parole_wflow = 
+  workflow() %>% 
+  add_model(tree_model1) %>% 
+  add_recipe(parole_recipe)
+
+parole_fit = fit(parole_wflow, train)
+
+```
+
+```{r}
+tree1 = parole_fit %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+fancyRpartPlot(tree1, tweak = 1.15)
+```
+  
+### Task 3  
+If the person is non-white: they are predicted to be a violator.   
+If the person is white: they are not predicted to be a violator.  
+  
+### Task 4
+```{r}
+parole_fit$fit$fit$fit$cptable
+```
+
+  
+The optimal CP value that R gave us is .01851852. The xerror for this CP value is 1.240741. The CP value associated with our tree is .01, which is not the CP value associated with the tree.
+  
+### Task 5
+  
+```{r}
+set.seed(123)
+folds = vfold_cv(train, v = 5)
+```
+
+
+```{r}
+parole_recipe = recipe(violator ~., train) %>%
+  step_dummy(all_nominal(),-all_outcomes())
+
+tree_model1 = decision_tree(cost_complexity = tune()) %>% 
+  set_engine("rpart", model = TRUE) %>% 
+  set_mode("classification")
+
+tree_grid1 = grid_regular(cost_complexity(),
+                          levels = 25) 
+
+parole_wflow = 
+  workflow() %>% 
+  add_model(tree_model1) %>% 
+  add_recipe(parole_recipe)
+
+tree_res1 = 
+  parole_wflow %>% 
+  tune_grid(
+    resamples = folds,
+    grid = tree_grid1
+    )
+
+tree_res1
+```
+
+```{r}
+tree_res1 %>%
+  collect_metrics() %>%
+  ggplot(aes(cost_complexity, mean)) +
+  geom_line(size = 1.5, alpha = 0.6) +
+  geom_point(size = 2) +
+  facet_wrap(~ .metric, scales = "free", nrow = 2) 
+
+```
+
+
+```{r}
+best_tree = tree_res1 %>%
+  select_best("accuracy")
+
+best_tree
+```
+  
+### Task 6  
+  
+The CP value that yields the optimal accuracy value is .0422.  
+  
+### Task 7
+  
+```{r}
+final_wf = 
+  parole_wflow %>% 
+  finalize_workflow(best_tree)
+```
+
+```{r}
+final_fit = fit(final_wf, train)
+
+tree = final_fit %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+#fancyRpartPlot(tree, tweak = 1.5) 
+```
+
+   
+### Task 8  
+
+The accuracy of the root will be the accuracy of a model that predicts that 100% of the parolees will be non-violators. We can generate this value by taking the total number of non-violators and dividing it by the total number of rows in the data set.
+  
+```{r}
+sum(train$violator == 'No')
+
+```
+  
+The total number of violators in our training set is 417, while the total number of rows in our data set is 471. We can now find the accuracy of our "root" by dividing the two. 
+```{r}
+417/471
+
+```
+The accuracy of our root that we created is .8853503
+  
+### Task 9
+  
+  
+```{r}
+Blood <- read_csv("Blood.csv")
+```
+
+```{r}
+levels(Blood$DonatedMarch) <- list(Yes  = "1", No = "0")
+Blood$DonatedMarch <- as.factor(Blood$DonatedMarch)
+levels(Blood$DonatedMarch) <- list(Yes  = "1", No = "0")
+```
+  
+  
+```{r}
+set.seed(1234) 
+blood_split = initial_split(Blood, prop = 0.7, strata = DonatedMarch) 
+train2 = training(blood_split)
+test2 = testing(blood_split)
+```
+  
+  
+```{r}
+set.seed(1234)
+folds = vfold_cv(train2, v = 5)
+```
+
+
+```{r}
+blood_recipe = recipe(DonatedMarch ~., train2) %>%
+  step_dummy(all_nominal(),-all_outcomes())
+
+tree_model2 = decision_tree(cost_complexity = tune()) %>% 
+  set_engine("rpart", model = TRUE) %>% 
+  set_mode("classification")
+
+tree_grid2 = grid_regular(cost_complexity(),
+                          levels = 25) 
+
+blood_wflow = 
+  workflow() %>% 
+  add_model(tree_model2) %>% 
+  add_recipe(blood_recipe)
+
+tree_res2 = 
+  blood_wflow %>% 
+  tune_grid(
+    resamples = folds,
+    grid = tree_grid2
+    )
+
+tree_res2
+```
+
+```{r}
+tree_res2 %>%
+  collect_metrics() %>%
+  ggplot(aes(cost_complexity, mean)) +
+  geom_line(size = 1.5, alpha = 0.6) +
+  geom_point(size = 2) +
+  facet_wrap(~ .metric, scales = "free", nrow = 2) 
+```
+
+
+```{r}
+best_tree2 = tree_res2 %>%
+  select_best("accuracy")
+
+best_tree2
+```
+  
+The optimal CP value that will maximize accuracy is .00750  
+  
+### Task 10
+  
+Building a Tree
+```{r}
+blood_recipe = recipe(DonatedMarch  ~ ., train2)
+
+
+tree_model2 = decision_tree(cost_complexity = .01778279) %>% 
+  set_engine("rpart", model = TRUE) %>% 
+  set_mode("classification")
+
+
+blood_wflow = 
+  workflow() %>% 
+  add_model(tree_model2) %>% 
+  add_recipe(blood_recipe)
+
+blood_fit = fit(blood_wflow, train2)
+
+```
+
+```{r}
+tree2 = blood_fit %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+fancyRpartPlot(tree2, tweak = 1.25)
+```
+  
+### Task 11  
+  
+Predictions on the Training Set
+
+```{r}
+treepred2 = predict(blood_fit, train2, type = "class")
+head(treepred2)
+```
+
+```{r}
+confusionMatrix(treepred2$.pred_class,train2$DonatedMarch,positive="Yes")
+```
+  
+Predictions on the Testing Set  
+```{r}
+treepred_test2 = predict(blood_fit, test2, type = "class")
+head(treepred_test2)
+```
+
+```{r}
+confusionMatrix(treepred_test2$.pred_class,test2$DonatedMarch,positive="Yes") 
+```
+
+  
+Accuracy on the training set: .826
+Accuracy on the testing set: .7556
+  
+The tree performed better on the training set than on the testing set, but still somewhat close. Neither accuracy is much higher than the No Information Rate. The training model has a p-value of >.05, while the training model on the testing set has an insignificant p-value.

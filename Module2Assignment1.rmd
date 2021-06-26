@@ -1,0 +1,134 @@
+---
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+# Module 2 Assignment Quiz  
+## Thomas Chapman  
+### BAN502
+
+```{r include=FALSE}
+library(tidyverse)
+library(GGally)
+library(tidymodels)
+library(lmtest)
+library(dplyr)
+library(tidyr)
+
+```
+
+### Task 1  
+
+```{r}
+air = airquality
+str(air)
+```
+
+This dataset has 153 observations of 6 variables. There is missing data. Most likely, "Ozone" is the dependent variable.  
+  
+### Task 2
+
+```{r}
+air2 <- air %>% 
+  drop_na() 
+```
+
+This new dataset still has 6 columns (variables), but now 111 rows (observations).
+  
+### Task 3
+  
+```{r}
+ggpairs(air2)
+ggcorr(air2, label = TRUE)
+```
+  
+The variable that is most strongly correlated with the "Ozone" variable is "Temperature". The variable that is the least correlated with "Ozone" is "Day".  
+  
+### Task 4
+  
+```{r}
+ggplot(air2, aes(x=Temp, y=Ozone)) +
+  geom_point()
+```
+  
+There looks to be a positive, linear relationship between "Temp" and "Ozone."
+  
+
+### Task 5
+  
+```{r}
+simple_air2 = recipe(Ozone ~ Temp, air2)
+simple_air2
+
+lm_model = 
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_workflow = 
+  workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(simple_air2)
+
+lm_fit = fit(lm_workflow, air2)
+
+summary(lm_fit$fit$fit$fit)
+```
+  
+a. This model is an okay model. The r-square value of .483 isn't great but it's not bad either. The significance of "Temp", the predictor variable, is less than .05, making it a significant variable. 
+  
+  
+b. The slope efficient most likely falls between 1.96 and 2.91. 
+
+```{r}
+confint(lm_fit$fit$fit$fit)
+```
+  
+  
+### Task 6
+
+```{r}
+ggplot(air2, aes(x=Temp, y=Ozone)) +
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE)
+```
+  
+### Task 7
+
+```{r}
+testdata=data.frame(Temp=80)
+predict(lm_fit, new_data = testdata)
+```
+
+
+  
+The prediction for Ozone when Temp is 80 is 47.5. 
+
+### Task 8  
+  
+**Assumption 1:** The predictor and response variable have a linear relationship. Looking at the plot we made in Task 4 and Task 6, and taking into account the correlation of .7 that we calculated in Task 3, we can assume that the predictor and response variable have a linear relationship, and that this assumption is valid.
+  
+**Assumption 2** Model errors (residuals) are independent. We can use a Durbin-Watson Test to examine the independence of the residuals. The test below gives us a p-value of .21, which is greater than .05, suggesting that the residuals are likely independent.This assumption is valid.
+  
+
+
+```{r}
+dwtest(lm_fit$fit$fit$fit)
+```
+  
+**Assumption 3:** Model residuals exhibit constant variance. We can test this by examining a plot of residuals. Looking at the plot below, the variance is constant for the most part, with the exception of 7 different data points between Temp = 78 and Temp = 98, that do have larger residuals. I would say that overall this assumption for this model is valid.
+
+```{r}
+air3 <- air2 %>% mutate(resid1 = lm_fit$fit$fit$fit$residuals)
+ggplot(air3, aes(x=Temp, y= resid1)) +
+  geom_point()
+```
+  
+**Assumption 4**: Model Residuals are normally distributed. We can assess this by examining a histogram of the residuals.  The histogram shows us that the model's residuals have a bimodal distribution - basically two normal distribution curves combined. Since it is not a normally distributed, we can't say this assumption is valid.
+
+```{r}
+ggplot(air3, aes(x=resid1)) +
+  geom_histogram()
+```
+
+

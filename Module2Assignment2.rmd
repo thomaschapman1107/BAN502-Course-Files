@@ -1,0 +1,212 @@
+---
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+# Module 2 Assignment 2  
+## Thomas Chapman  
+### BAN 502  
+
+```{r include=FALSE}
+library("tidyverse")
+library("tidymodels")
+library("GGally")
+library(lubridate)
+library(glmnet)
+
+library(ggcorrplot)
+
+library(MASS)
+
+library(car)
+
+library(lmtest)
+library(readr)
+
+
+
+```
+
+### Task 1
+  
+```{r}
+bike <- read_csv("bike_cleaned (1).csv")
+bike <- bike %>% 
+  mutate(dteday = mdy(dteday)) %>%
+  mutate_if(is.character, as.factor)
+
+bike$hr <- as.character(bike$hr)
+ 
+```
+  
+We convert the "hr" to a character because the variable is used for identification and characterization purposes, not as a variable of measurement. The size of the values do not reflect differences in degrees. (i.e.: an hour of 2 is not twice as large as an hour of 1, etc.)
+  
+### Task 2  
+
+```{r}
+ggcorr(bike, label = "TRUE")
+
+```
+   
+Though none of the quantitative variables are very strongly correlated, the two variables that have the highest correlation with "count" are "temp" and "atemp."
+  
+### Task 3
+  
+```{r}
+ggplot(bike,aes(x=hr,y=count))+ 
+  geom_boxplot()+ 
+  theme_bw()
+
+ggplot(bike,aes(x=season,y=count))+ 
+  geom_boxplot()+ 
+  theme_bw()
+
+ggplot(bike,aes(x=mnth,y=count))+ 
+  geom_boxplot()+ 
+  theme_bw()
+
+ggplot(bike,aes(x=holiday,y=count))+ 
+  geom_boxplot()+ 
+  theme_bw()
+
+ggplot(bike,aes(x=weekday,y=count))+ 
+  geom_boxplot()+ 
+  theme_bw()
+
+ggplot(bike,aes(x=workingday,y=count))+ 
+  geom_boxplot()+ 
+  theme_bw()
+
+ggplot(bike,aes(x=weathersit,y=count))+ 
+  geom_boxplot()+ 
+  theme_bw()
+```
+  
+**season:** It appears that season does have an effect on count. This is likely because certain seasons, like summer and spring, are more likely to have "bike-friendly" weather than others, like Winter. 
+  
+**month** It appears that month does have an effect on count as well. Similar to season, certain months are more likely to have "bike-friendly" weather. 
+  
+**holiday** Holiday does have a slight effect on count. The count on non-holiday is higher, which can be explained by more working people needing transportation.
+  
+**weekday** It doesn't appear that weekday has a large effect on count. However, both Sunday and Saturday appear to be the two lowest variables, which would be explained by working individuals not needing the bikes for transportation to work on those days.
+  
+**workingday** Similar to weekday, workingday does look to play a small part in affecting the count variable. This can be explained by working individuals not needing the bikes for transportation to work on those days.
+  
+**weathersit** does have a pretty heavy impact on count. This is definitely expected, as usually people are less inclined to ride bikes when there is precipitation. 
+  
+    
+### Task 4
+  
+```{r}
+bike2 = recipe(count ~ temp, bike)
+
+
+lm_model = 
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_workflow = 
+  workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(bike2)
+
+lm_fit = fit(lm_workflow, bike)
+
+summary(lm_fit$fit$fit$fit)
+```
+   
+Model: (count) = 381.29 * (temp) - .036  
+Though the p-value for the model is less than .05, making the variable "temp" a statistically significant predictor, the r-squared value is very low. This means that the model is not a high-quality model.
+  
+  
+### Task 5
+```{r}
+bike3 = bike %>% 
+  mutate(season = as_factor(season)) 
+  
+```
+  
+
+```{r}
+bike_recipe = recipe(count ~ season + mnth + hr + holiday + weekday + workingday + weathersit + temp + atemp + hum + windspeed, bike) %>%
+    step_dummy(all_nominal()) %>%
+    step_center(all_predictors()) %>%
+    step_scale(all_predictors())
+  
+   
+ridge_model = linear_reg(mixture = 0) %>%
+  set_engine("glmnet")
+
+ridge_wflow = 
+  workflow() %>%
+  add_model(ridge_model) %>%
+  add_recipe(bike_recipe)
+
+ridge_fit = fit(ridge_wflow, bike)
+```
+
+```{r}
+ridge_fit
+```
+```{r}
+plot(ridge_fit$fit$fit$fit$lambda, ridge_fit$fit$fit$fit$dev.ratio)
+```
+```{r}
+ridge_fit %>% 
+  pull_workflow_fit() %>%
+  pluck("fit")
+```
+  
+Looking at the Lambda values above, we are going to pick the value of "15", as that seems to be where the "r-squared" value starts to have diminishing returns. 
+  
+```{r}
+ridge_fit %>%
+  pull_workflow_fit() %>%
+  pluck("fit") %>%
+  coef(s = 27)
+```
+
+  
+This resulting model accounts for around 62% of the variation, which makes it a moderately strong predictor of "count."
+  
+### Task 6
+  
+```{r}
+
+bike_recipe = recipe(count ~ season + mnth + hr + holiday + weekday + workingday + weathersit + temp + atemp + hum + windspeed, bike) %>%
+    step_dummy(all_nominal()) %>%
+    step_center(all_predictors()) %>%
+    step_scale(all_predictors())
+
+lasso_model = linear_reg(mixture = 1) %>%
+  set_engine("glmnet")
+
+lasso_wflow= 
+  workflow() %>%
+  add_model(lasso_model) %>%
+  add_recipe(bike_recipe)
+
+lasso_fit = fit(lasso_wflow, bike)
+```
+
+```{r}
+lasso_fit %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+```
+  
+We are going to select a Lambda value of .926
+  
+```{r}
+lasso_fit %>% 
+  pull_workflow_fit() %>%
+  pluck("fit") %>%
+  coef(s = .926)
+```
+  
+    
+The resulting model removed the months of August, November, December, January, and February as predictor variables. It also removed hr "6", the days Wednesday and Thursday, the workingDay variable, and Misty weather, all as predictor variables. The model accounts for around 63% of the variation, making it a moderately strong model. 
+   
+The implications of the model results from the ridge and lasso methods are that many of the categorical variables are significant predictors, but not all of them are necessary in a model. Too many of them may cause "over-fitting." The ridge and lasso methods are based on the concept of regularization - meaning that they are attempting to reduce the likelihood that the model will "overfit."  
+  
